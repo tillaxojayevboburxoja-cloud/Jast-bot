@@ -7,11 +7,9 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 PSYCHOLOGIST = os.environ.get("PSYCHOLOGIST_USERNAME", "@jast_psixolog")
-
 groq_client = Groq(api_key=GROQ_API_KEY)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 MAIN_MENU, CHAT, MOOD, MEDITATION, BREATHING = range(5)
 users = {}
 
@@ -20,12 +18,7 @@ def get_user(uid):
         users[uid] = {"history": [], "moods": [], "name": ""}
     return users[uid]
 
-PROMPT = """Sen JAST - o'zbek tilida ruhiy yordam yordamchisi.
-- Faqat o'zbek tilida gapir
-- Qisqa, aniq javob ber (2-4 jumla)
-- Tinglaysan, hukm chiqarmassan
-- Jiddiy muammoda psixologga yonalt
-- Har doim savol bilan tugatishga harakat qil"""
+PROMPT = """Sen JAST - o'zbek tilida ruhiy yordam yordamchisi. Faqat o'zbek tilida gapir. Qisqa javob ber."""
 
 def menu():
     return ReplyKeyboardMarkup([
@@ -36,9 +29,8 @@ def menu():
     u = get_user(update.effective_user.id)
     u["name"] = update.effective_user.first_name or "Dostim"
     await update.message.reply_text(
-        f"Salom, {u['name']}!\n\nMen JAST — ruhiy yordam yordamchingman.\nJasorat bilan oz haqingda gamxorlik qil.\n\nNimadan boshlaysiz?",
-        reply_markup=menu()
-    )
+        f"Salom, {u['name']}!\n\nMen JAST — ruhiy yordam yordamchingman.\nNimadan boshlaysiz?",
+        reply_markup=menu())
     return MAIN_MENU
 
 async def chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -55,51 +47,47 @@ async def chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         r = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role":"system","content":PROMPT}]+u["history"],
-            max_tokens=200, temperature=0.7
-        )
+            max_tokens=200, temperature=0.7)
         reply = r.choices[0].message.content
         u["history"].append({"role":"assistant","content":reply})
     except:
-        reply = "Hozir texnik muammo. Bir daqiqadan keyin qayta yozing."
+        reply = "Hozir texnik muammo. Qayta yozing."
     await update.message.reply_text(reply, reply_markup=menu())
-    return CHATasync def mood_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Bugun kayfiyatingiz qanday?", reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton("Zor", callback_data="mood_5"), InlineKeyboardButton("Yaxshi", callback_data="mood_4")],
-        [InlineKeyboardButton("Ortacha", callback_data="mood_3"), InlineKeyboardButton("Yomon", callback_data="mood_2")],
-        [InlineKeyboardButton("Juda yomon", callback_data="mood_1")]
-    ]))
+    return CHAT
+
+async def mood_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Bugun kayfiyatingiz qanday?",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("Zor", callback_data="mood_5"),
+             InlineKeyboardButton("Yaxshi", callback_data="mood_4")],
+            [InlineKeyboardButton("Ortacha", callback_data="mood_3"),
+             InlineKeyboardButton("Yomon", callback_data="mood_2")],
+            [InlineKeyboardButton("Juda yomon", callback_data="mood_1")]]))
     return MOOD
 
 async def mood_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    uid = q.from_user.id
-    u = get_user(uid)
+    u = get_user(q.from_user.id)
     score = int(q.data.split("_")[1])
     u["moods"].append({"score":score,"date":datetime.now().strftime("%d.%m")})
-    texts = {5:"Ajoyib! Bu energiyani saqlang.",4:"Yaxshi. Shu holatni qadrlang.",
-             3:"Tushunarli. Nima boldi? Gaplashmoqchimisiz?",
-             2:"Qiyin payt. Yolgiz emassiz. Nima boldi?",
-             1:"Bu ogir. Men tinglayman. Nima haqida gaplashmoqchisiz?"}
-    avg = ""
-    if len(u["moods"]) >= 3:
-        a = sum(m["score"] for m in u["moods"][-7:])/min(len(u["moods"]),7)
-        avg = f"\n\nSonggi ortacha: {a:.1f}/5"
-    await q.edit_message_text(texts[score]+avg)
+    texts = {5:"Ajoyib!",4:"Yaxshi.",3:"Tushunarli. Nima boldi?",
+             2:"Qiyin payt. Yolgiz emassiz.",1:"Bu ogir. Men tinglayman."}
+    await q.edit_message_text(texts[score])
     if score <= 2:
-        await context.bot.send_message(q.message.chat_id, "Jiddiy qiynalayotgan bolsangiz:",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Psixologga yozing", url=f"https://t.me/{PSYCHOLOGIST.replace('@','')}")]])
-        )
+        await context.bot.send_message(q.message.chat_id, "Psixolog bilan gaplashing:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Psixologga yozing",
+            url=f"https://t.me/{PSYCHOLOGIST.replace('@','')}")]]))
     await context.bot.send_message(q.message.chat_id, "Davom etish:", reply_markup=menu())
     return MAIN_MENUMEDS = [
-    ("Tana skaneri (5 daqiqa)", "1. Qulay turing\n2. Kozingizni yuming\n3. Oyoq barmoqdan boshlang\n4. Sekin boshgacha keling\n5. Har joyda 10 soniya toting\n\n5 daqiqa. Shoshilmang."),
-    ("Xotirjamlik (3 daqiqa)", "1. Kozingizni yuming\n2. Dengiz tolqinini tasavvur qiling\n3. Nafas = tolqin keladi\n4. Chikarish = tolqin ketadi\n\n3 daqiqa. Hoziroq boshlang."),
-    ("Ertalab zaryadka (2 daqiqa)", "1. Ornidan turing\n2. Qollarni yuqori kotaring\n3. 5 marta chuqur nafas\n4. Bugun 1 yaxshi narsa oylang\n\n2 daqiqa. Har kuni.")
+    ("Tana skaneri (5 daqiqa)", "1. Qulay turing\n2. Kozingizni yuming\n3. Oyoq barmoqdan boshlang\n4. Boshgacha keling\n5. Har joyda 10 soniya toting"),
+    ("Xotirjamlik (3 daqiqa)", "1. Kozingizni yuming\n2. Dengiz tolqinini tasavvur qiling\n3. Nafas = tolqin keladi\n4. Chikarish = tolqin ketadi"),
+    ("Ertalab zaryadka (2 daqiqa)", "1. Ornidan turing\n2. Qollarni kotaring\n3. 5 marta nafas\n4. Bugun 1 yaxshi narsa oylang")
 ]
 
 async def med_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Meditatsiya tanlang:", reply_markup=InlineKeyboardMarkup(
-        [[InlineKeyboardButton(m[0], callback_data=f"med_{i}")] for i,m in enumerate(MEDS)]))
+    await update.message.reply_text("Meditatsiya tanlang:",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(m[0], callback_data=f"med_{i}")] for i,m in enumerate(MEDS)]))
     return MEDITATION
 
 async def med_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -111,14 +99,14 @@ async def med_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return MAIN_MENU
 
 BREATHS = [
-    ("4-7-8 Nafas", "4 soniya nafas oling\n7 soniya ushlab turing\n8 soniya chiqaring\n\n4 marta takrorlang.\nUxlay olmayotganingizda samarali."),
-    ("Quti nafas", "4 soniya nafas\n4 soniya ushlab tur\n4 soniya chikar\n4 soniya ushlab tur\n\n5 marta. Stressda ishlating."),
-    ("Tez tinchlash (1 daqiqa)", "2 soniya nafas oling\n4 soniya sekin chiqaring\n\n6 marta = 1 daqiqa\nGazab va panikada ishlating.")
+    ("4-7-8 Nafas", "4 soniya nafas\n7 soniya ushlab tur\n8 soniya chikar\n\n4 marta takrorla"),
+    ("Quti nafas", "4 soniya nafas\n4 soniya ushlab\n4 soniya chikar\n4 soniya ushlab\n\n5 marta"),
+    ("Tez tinchlash", "2 soniya nafas\n4 soniya chikar\n\n6 marta = 1 daqiqa")
 ]
 
 async def breath_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Nafas mashqi tanlang:", reply_markup=InlineKeyboardMarkup(
-        [[InlineKeyboardButton(b[0], callback_data=f"breath_{i}")] for i,b in enumerate(BREATHS)]))
+    await update.message.reply_text("Nafas mashqi tanlang:",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(b[0], callback_data=f"breath_{i}")] for i,b in enumerate(BREATHS)]))
     return BREATHING
 
 async def breath_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -130,10 +118,9 @@ async def breath_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return MAIN_MENU
 
 async def psychologist(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Professional yordam olish jasorat belgisi.\n\nMutaxassis bilan boglaning:",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Psixologga yozing", url=f"https://t.me/{PSYCHOLOGIST.replace('@','')}")]])
-    )
+    await update.message.reply_text("Professional yordam olish jasorat belgisi.",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Psixologga yozing",
+        url=f"https://t.me/{PSYCHOLOGIST.replace('@','')}")]]))
     return MAIN_MENU
 
 async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -156,8 +143,7 @@ def main():
             MEDITATION: [CallbackQueryHandler(med_cb, pattern="^med_")],
             BREATHING: [CallbackQueryHandler(breath_cb, pattern="^breath_")],
         },
-        fallbacks=[CommandHandler("start", start)],
-    )
+        fallbacks=[CommandHandler("start", start)])
     app.add_handler(conv)
     logger.info("JAST ishga tushdi!")
     app.run_polling(drop_pending_updates=True)
