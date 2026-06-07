@@ -6,6 +6,8 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://worker-production-db5a.up.railway.app")
+PORT = int(os.environ.get("PORT", 8080))
 groq_client = Groq(api_key=GROQ_API_KEY)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -107,8 +109,8 @@ def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     conv = ConversationHandler(entry_points=[CommandHandler("start", start)], states={MAIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_menu)], CHAT: [MessageHandler(filters.TEXT & ~filters.COMMAND, chat_message)], MOOD: [CallbackQueryHandler(mood_cb, pattern="^mood_")], MEDITATION: [CallbackQueryHandler(med_cb, pattern="^med_")], BREATHING: [CallbackQueryHandler(breath_cb, pattern="^breath_")]}, fallbacks=[CommandHandler("start", start)])
     app.add_handler(conv)
-    logger.info("JAST ishga tushdi!")
-    app.run_polling(drop_pending_updates=True)
+    logger.info("JAST webhook ishga tushdi!")
+    app.run_webhook(listen="0.0.0.0", port=PORT, url_path=TELEGRAM_TOKEN, webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}")
 
 if __name__ == "__main__":
     main()
