@@ -6,8 +6,6 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://worker-production-db5a.up.railway.app")
-PORT = int(os.environ.get("PORT", 8080))
 ADMIN_ID = 8023489682
 groq_client = Groq(api_key=GROQ_API_KEY)
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +19,6 @@ def get_user(uid):
     return users[uid]
 
 PROMPT = """Sen JAST — o'zbek tilidagi professional ruhiy yordam yordamchisisiz.
-
 QOIDALAR:
 1. FAQAT ruhiy salomatlik, his-tuyg'ular, stress, tashvish, depressiya, munosabatlar, shaxsiy o'sish mavzularida gaplash.
 2. Boshqa mavzular so'ralsa: "Men faqat ruhiy salomatlik bo'yicha yordam bera olaman. Qanday his qilyapsiz bugun? 💚" de.
@@ -113,12 +110,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total = len(users)
     total_moods = sum(len(u["moods"]) for u in users.values())
     total_chats = sum(len(u["history"]) for u in users.values())
-    await update.message.reply_text(
-        f"📊 JAST Statistika:\n\n"
-        f"👤 Foydalanuvchilar: {total}\n"
-        f"💬 Suhbat xabarlari: {total_chats}\n"
-        f"😊 Kayfiyat yozuvlari: {total_moods}"
-    )
+    await update.message.reply_text(f"📊 JAST Statistika:\n\n👤 Foydalanuvchilar: {total}\n💬 Suhbat xabarlari: {total_chats}\n😊 Kayfiyat yozuvlari: {total_moods}")
 
 async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     t = update.message.text
@@ -134,8 +126,8 @@ def main():
     conv = ConversationHandler(entry_points=[CommandHandler("start", start)], states={MAIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_menu)], CHAT: [MessageHandler(filters.TEXT & ~filters.COMMAND, chat_message)], MOOD: [CallbackQueryHandler(mood_cb, pattern="^mood_")], MEDITATION: [CallbackQueryHandler(med_cb, pattern="^med_")], BREATHING: [CallbackQueryHandler(breath_cb, pattern="^breath_")]}, fallbacks=[CommandHandler("start", start)])
     app.add_handler(conv)
     app.add_handler(CommandHandler("stats", stats))
-    logger.info("JAST webhook ishga tushdi!")
-    app.run_webhook(listen="0.0.0.0", port=PORT, url_path=TELEGRAM_TOKEN, webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}")
+    logger.info("JAST ishga tushdi!")
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
