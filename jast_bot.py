@@ -8,6 +8,7 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://worker-production-db5a.up.railway.app")
 PORT = int(os.environ.get("PORT", 8080))
+ADMIN_ID = 8023489682
 groq_client = Groq(api_key=GROQ_API_KEY)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ PROMPT = """Sen JAST — o'zbek tilidagi professional ruhiy yordam yordamchisisi
 
 QOIDALAR:
 1. FAQAT ruhiy salomatlik, his-tuyg'ular, stress, tashvish, depressiya, munosabatlar, shaxsiy o'sish mavzularida gaplash.
-2. Boshqa mavzular (mashina, texnologiya, sport, oziq-ovqat va h.k.) so'ralsa: "Men faqat ruhiy salomatlik bo'yicha yordam bera olaman. Qanday his qilyapsiz bugun? 💚" de.
+2. Boshqa mavzular so'ralsa: "Men faqat ruhiy salomatlik bo'yicha yordam bera olaman. Qanday his qilyapsiz bugun? 💚" de.
 3. Har doim o'zbek tilida javob ber.
 4. Qisqa, issiq, empatik javob ber (2-4 jumla).
 5. Emoji ishlatib yoz.
@@ -105,6 +106,20 @@ async def psychologist(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👨‍⚕️ Psixolog bilan bog'lanish\n\nMutaxassis psixolog raqamini olish uchun quyidagi tugmani bosing 👇", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📞 Psixolog raqamini olish", url="https://t.me/boburxoja")]]))
     return MAIN_MENU
 
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("Bu buyruq faqat admin uchun! 🔒")
+        return
+    total = len(users)
+    total_moods = sum(len(u["moods"]) for u in users.values())
+    total_chats = sum(len(u["history"]) for u in users.values())
+    await update.message.reply_text(
+        f"📊 JAST Statistika:\n\n"
+        f"👤 Foydalanuvchilar: {total}\n"
+        f"💬 Suhbat xabarlari: {total_chats}\n"
+        f"😊 Kayfiyat yozuvlari: {total_moods}"
+    )
+
 async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     t = update.message.text
     if t == "💬 Suhbat": return await start(update, context)
@@ -118,6 +133,7 @@ def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     conv = ConversationHandler(entry_points=[CommandHandler("start", start)], states={MAIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_menu)], CHAT: [MessageHandler(filters.TEXT & ~filters.COMMAND, chat_message)], MOOD: [CallbackQueryHandler(mood_cb, pattern="^mood_")], MEDITATION: [CallbackQueryHandler(med_cb, pattern="^med_")], BREATHING: [CallbackQueryHandler(breath_cb, pattern="^breath_")]}, fallbacks=[CommandHandler("start", start)])
     app.add_handler(conv)
+    app.add_handler(CommandHandler("stats", stats))
     logger.info("JAST webhook ishga tushdi!")
     app.run_webhook(listen="0.0.0.0", port=PORT, url_path=TELEGRAM_TOKEN, webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}")
 
