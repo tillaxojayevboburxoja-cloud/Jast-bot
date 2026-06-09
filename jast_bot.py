@@ -1,4 +1,5 @@
-import os, logging
+import os
+import logging
 from datetime import datetime
 from groq import Groq
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
@@ -52,16 +53,15 @@ ISLOM + PSIXOLOGIYA USLUBI:
 - Kognitiv-xulq-atvor terapiyasi (CBT), mindfulness va pozitiv psixologiya usullarini qo'lla.
 - Viktor Frankl, Aaron Bek, Abraham Maslow kabi olimlarning ilmiy nazariyalariga tayangan holda tavsiyalar ber.
 
-CHUQUR TAHLIL QOIDALARI:
-1. Har bir muammoni 3 bosqichda tahlil qil: a) Hozirgi holat b) Kelib chiqish sababi c) Amaliy yechim.
-2. Agar foydalanuvchining savoli tushunarsiz bo'lsa: "Nima demoqchi bo'lganingizni to'liq tushuna olmadim. Biroz aniqroq tushuntirib bera olasizmi? Sizga to'g'ri ko'mak berishni istayman." deb so'ra.
-3. Agar foydalanuvchi asosiy mavzudan chekinishni boshlasa, suhbatni yumshoqlik bilan yo'naltir.
-4. Foydalanuvchi xato yoki zararli yo'ldaligini sezsang, uni to'g'ri yo'lga yo'naltir.
+CHUQUR TAHLIL VA MATNNI TO'G'RI TUSHUNISH QOIDALARI:
+1. DIQQAT: Foydalanuvchi lotin alifbosida "zor boldi" (zo'r bo'ldi), "kayfiyatim zor", "yaxshi uxlash uchun maslahat bering" deb yozsa, buni ijobiy holat deb qabul qil! Foydalanuvchining kayfiyati yomon deb o'ylama va unga asossiz hamdardlik bildirma.
+2. Agar foydalanuvchining kayfiyati a'lo bo'lsa, uning quvonchiga sherik bo'l, erishgan ijobiy holatini maqta va buni yanada mustahkamlash, bugungi tunni xotirjam o'tkazish uchun dam olish va uyqu gigiyenasi bo'yicha amaliy tavsiyalar ber.
+3. Har bir muammoni yoki so'rovni 3 bosqichda tahlil qil: a) Hozirgi holat b) Kelib chiqish sababi c) Amaliy yechim.
+4. Agar foydalanuvchining savoli tushunarsiz bo'lsa: "Nima demoqchi bo'lganingizni to'liq tushuna olmadim. Biroz aniqroq tushuntirib bera olasizmi? Sizga to'g'ri ko'mak berishni istayman." deb so'ra.
 5. Har bir javobing oxirida suhbatni davom ettiruvchi va chuqur o'ylantiruvchi 1 ta ochiq savol ber.
 
 MUHIM QOIDALAR:
-- Har bir bo'lim alohida yo'nalishga ega. Dard bo'limida nafas mashqlarini aralashtirma.
-- Javoblaring 3-5 jumlada bo'lib, chuqur ma'no va aniqlikka ega bo'lsin.
+- Javoblaring chuqur ma'no, aniqlik va mantiqiy yakunga ega bo'lsin. Hech qachon gapni chala qoldirma.
 - Agar foydalanuvchida o'z joniga qasd qilish moyilligini sezsang, uni kechiktirmasdan professional shoshilinch psixologik yordamga yo'naltir."""
 
 DARD_PROMPT = """Sen JAST loyihasining "Dardimni aytay" bo'limidasan.
@@ -99,7 +99,8 @@ def main_menu():
 def back_menu():
     return ReplyKeyboardMarkup([[KeyboardButton("⬅️ Bosh menu")]], resize_keyboard=True)
 
-async def ai_response(prompt, history, user_msg, max_tokens=350):
+# max_tokens standart qiymati o'zbek tili uchun 800 ga oshirildi, gap uzilib qolmasligi uchun
+async def ai_response(prompt, history, user_msg, max_tokens=800):
     history.append({"role":"user","content":user_msg})
     if len(history) > 12:
         history = history[-12:]
@@ -107,7 +108,9 @@ async def ai_response(prompt, history, user_msg, max_tokens=350):
         r = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role":"system","content":prompt}]+history,
-            max_tokens=max_tokens, temperature=0.75)
+            max_tokens=max_tokens, 
+            temperature=0.75
+        )
         reply = r.choices[0].message.content
         history.append({"role":"assistant","content":reply})
         return reply, history
@@ -154,7 +157,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         memory_ctx = get_memory_context(u)
         reply, u["history"] = await ai_response(
             DARD_PROMPT + memory_ctx, u["history"],
-            f"Foydalanuvchi dard bo'limiga kirdi. Ismi: {u['name']}. Uni samimiy kutib ol va hozirda uni nima qiynayotganini so'ra.")
+            f"Foydalanuvchi dard bo'limiga kirdi. Ismi: {u['name']}. Uni samimiy kutib ol va hozirda uni nima qiynayotganini so'ra.", max_tokens=800)
         await update.message.reply_text(reply, reply_markup=back_menu())
         return
 
@@ -207,7 +210,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         u["history"] = []
         reply, u["history"] = await ai_response(
             MOTIVATSIYA_PROMPT, u["history"],
-            f"Foydalanuvchi {u['name']} motivatsiya izlamoqda. Unga kuchli, ilmiy va islomiy asoslangan motivatsiya ber. Oxirida amalga oshirishi mumkin bo'lgan aniq bir qadam taklif qil.")
+            f"Foydalanuvchi {u['name']} motivatsiya izlamoqda. Unga kuchli, ilmiy va islomiy asoslangan motivatsiya ber. Oxirida amalga oshirishi mumkin bo'lgan aniq bir qadam taklif qil.", max_tokens=800)
         await update.message.reply_text(reply, reply_markup=back_menu())
         return
 
@@ -222,7 +225,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 3. Bugungi kun uchun kuchli ruhiy motivatsiya (2-3 ta gapdan iborat tugallangan fikr).
 4. Islomiy nuqtai nazar: bugungi kunga yetganlik uchun shukronalik keltirish haqida 1 ta oyat yoki hadis ma'nosi.
 
-MUHIM: Har bir fikrni to'liq yakunla, chala jumlalar qolmasin va barcha gaplar adabiy o'zbek tilida bo'lsin."""
+MUHIM: Har bir fikrni to'liq yakunla, chala jumlalar qolmasin va balla gaplar adabiy o'zbek tilida bo'lsin."""
 
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         try:
@@ -253,7 +256,7 @@ MUHIM: Har bir fikrni to'liq yakunla, chala jumlalar qolmasin va barcha gaplar a
         join = u.get("join_date", "noma'lum")
         if not moods and not sessions:
             await update.message.reply_text(
-                f"👋 Salom, {u['name']}!\n\nHali sizning ruhiy tarioxingiz bo'yicha ma'lumotlar shakllanmadi. Bot xizmatlaridan faol foydalanishni boshlang! 🚀", reply_markup=main_menu())
+                f"👋 Salom, {u['name']}!\n\nHali sizning ruhiy tarixingiz bo'yicha ma'lumotlar shakllandi. Bot xizmatlaridan faol foydalanishni boshlang! 🚀", reply_markup=main_menu())
             return
         text = f"📖 *{u['name']} ning ruhiy jurnali:*\n\n📅 *Botga a'zo bo'lingan sana:* {join}\n"
         if moods:
@@ -274,29 +277,30 @@ MUHIM: Har bir fikrni to'liq yakunla, chala jumlalar qolmasin va barcha gaplar a
 
     if u["stage"] == "dard":
         memory_ctx = get_memory_context(u)
-        reply, u["history"] = await ai_response(DARD_PROMPT + memory_ctx, u["history"], txt)
+        reply, u["history"] = await ai_response(DARD_PROMPT + memory_ctx, u["history"], txt, max_tokens=800)
         await update.message.reply_text(reply, reply_markup=back_menu())
         return
 
     if u["stage"] == "nafas_chat":
-        reply, u["history"] = await ai_response(NAFAS_PROMPT, u["history"], txt)
+        reply, u["history"] = await ai_response(NAFAS_PROMPT, u["history"], txt, max_tokens=800)
         await update.message.reply_text(reply, reply_markup=back_menu())
         return
 
     if u["stage"] == "motivatsiya":
-        reply, u["history"] = await ai_response(MOTIVATSIYA_PROMPT, u["history"], txt)
+        reply, u["history"] = await ai_response(MOTIVATSIYA_PROMPT, u["history"], txt, max_tokens=800)
         await update.message.reply_text(reply, reply_markup=back_menu())
         return
 
     if u["stage"] == "mood_chat":
         memory_ctx = get_memory_context(u)
-        reply, u["history"] = await ai_response(MAIN_PROMPT + memory_ctx, u["history"], txt)
+        reply, u["history"] = await ai_response(MAIN_PROMPT + memory_ctx, u["history"], txt, max_tokens=800)
         await update.message.reply_text(reply, reply_markup=back_menu())
         return
 
+    # Foydalanuvchi menyudan tashqari erkin narsa yozganda ishlaydigan asosiy qism (max_tokens=800 qilib to'g'rilandi)
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     memory_ctx = get_memory_context(u)
-    reply, u["history"] = await ai_response(MAIN_PROMPT + memory_ctx, u["history"], txt)
+    reply, u["history"] = await ai_response(MAIN_PROMPT + memory_ctx, u["history"], txt, max_tokens=800)
     await update.message.reply_text(reply, reply_markup=main_menu())
 
 async def mood_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -365,7 +369,7 @@ BREATHS_DATA = [
      "3️⃣ 8 soniya davomida — og'iz orqali sekin va ovozsiz CHIQLARING.\n\n"
      "🔁 Ushbu siklni 4 marta takrorlang. Mashqni hozir boshlang."),
     ("🤬 G'azabni tushirish uchun — Kvadrat (Box) nafasi",
-     "🔬 *Ilmiy asos:* Ushbu usuldan maxsus xizmat askarlari kuchli g'azab va kutilmagan stressni 3 daqiqada bartaraf etish uchun foydalanadilar.\n\n"
+     "🔬 *Ilmiy asos:* Ushbu usuldan maxsus xizmat askarlari kuchli g'azab va kutilmagan stressni 3 daqiqada bartaraf etish uchun foydalanamiz.\n\n"
      "1️⃣ 4 soniya nafas oling ➡️ 4 soniya ushlab turing ➡️ 4 soniya chiqaring ➡️ 4 soniya nafas olmasdan kuting.\n\n"
      "🔁 Xayolingizda har bir tomoni 4 soniyadan iborat kvadrat chizing. Mashqni kamida 5 marta takrorlang."),
     ("🥱 Tinch uyquga ketish uchun — 4-7-8 ritmi",
@@ -375,7 +379,7 @@ BREATHS_DATA = [
     ("🤯 Stress va toliqish uchun — Fiziologik xo'rsinish",
      "🔬 *Ilmiy asos:* Stenford universiteti tadqiqotlariga ko'ra, bu usul miyadagi stress signalini bir lahzada to'xtatuvchi eng tezkor tabiiy vositadir.\n\n"
      "1️⃣ Burun orqali ketma-ket 2 marta qisqa nafas oling (ikkinchi nafas birinchisidan chuqurroq bo'lsin).\n"
-     "2️⃣ Og'iz orqali 1 marta juda uzun va erkin qilib nafas chiqarib yuboring.\n\n"
+     "2️⃣ Og'iz orqali 1 marta juda uzun va erkin qibly nafas chiqarib yuboring.\n\n"
      "🔁 Jami 3-5 marta bajaring. Tanangizda darhol yengillik paydo bo'ladi."),
     ("🟢 Umumiy xotirjamlik — Diafragma (qorin) nafasi",
      "🔬 *Ilmiy asos:* Qorin bilan nafas olish yurak ritmining barqarorligini (HRV) yaxshilaydi va uzoq muddatda stressga chidamlilikni oshiradi.\n\n"
