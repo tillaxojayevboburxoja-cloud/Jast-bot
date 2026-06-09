@@ -1,5 +1,5 @@
 import os, logging
-from datetime import datetime, date
+from datetime import datetime
 from groq import Groq
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -14,36 +14,22 @@ users = {}
 
 def get_user(uid):
     if uid not in users:
-        users[uid] = {
-            "name": "",
-            "history": [],
-            "moods": [],
-            "sessions": [],
-            "stage": "menu",
-            "current_section": None,
-            "join_date": datetime.now().strftime("%d.%m.%Y")
-        }
+        users[uid] = {"name":"","history":[],"moods":[],"sessions":[],"stage":"menu","current_section":None,"join_date":datetime.now().strftime("%d.%m.%Y")}
     return users[uid]
 
 def save_session(u, section, summary):
-    u["sessions"].append({
-        "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
-        "section": section,
-        "summary": summary
-    })
+    u["sessions"].append({"date":datetime.now().strftime("%d.%m.%Y %H:%M"),"section":section,"summary":summary})
     if len(u["sessions"]) > 20:
         u["sessions"] = u["sessions"][-20:]
 
 def get_memory_context(u):
     if not u["sessions"]:
         return ""
-    recent = u["sessions"][-3:]
     context = "\n\nFoydalanuvchi tarixi:\n"
-    for s in recent:
+    for s in u["sessions"][-3:]:
         context += f"- {s['date']}: {s['section']} — {s['summary']}\n"
     if u["moods"]:
-        last_moods = u["moods"][-5:]
-        avg = sum(m["score"] for m in last_moods) / len(last_moods)
+        avg = sum(m["score"] for m in u["moods"][-5:]) / min(len(u["moods"]),5)
         context += f"\nO'rtacha kayfiyat: {avg:.1f}/5"
     return context
 
@@ -58,108 +44,88 @@ SEN QANDAY ODAMSAN:
 
 ISLOM + PSIXOLOGIYA USLUBI:
 - Qur'on oyatlari va hadislarni kerakli joyda keltir (faqat to'g'ri, tasdiqlangan)
-- "Innallaha ma'as-saabirin" — "Allah sabr qiluvchilar bilan birdir" kabi oyatlar
 - CBT, mindfulness, pozitiv psixologiya usullarini ishlatasan
 - Viktor Frankl, Aaron Beck, Abraham Maslow nazariyalariga tayanan
 
 CHUQUR TAHLIL QOIDALARI:
 1. Har savolni 3 qatlam tahlil qil: a) Hozirgi holat b) Sabab c) Yechim
-2. Agar savol tushunarsiz bo'lsa: "Nima demoqchiligingizga to'liq tushunmadim. Biroz tushunarliroq aytib bering — sizga yanada aniq yordam beray 🤝"
-3. Mavzudan chekinsa: "Boshqa masalada ham suhbatni davom ettirishimni istayapsizmi? Men bajonidil tayyorman 💚"
-4. Noto'g'ri yo'lda bo'lsa: "Bu fikringizdan qaytishingizni maslahat beraman — boshqa yo'l natijasi sizni xursand qiladi 🌟"
+2. Agar savol tushunarsiz bolsa: "Nima demoqchiligingizga toliq tushunmadim. Biroz tushunarliroq aytib bering — sizga yanada aniq yordam beray"
+3. Mavzudan chekinsa: "Boshqa masalada ham suhbatni davom ettirishimni istayapsizmi? Men bajonidil tayyorman"
+4. Notogri yolda bolsa: "Bu fikringizdan qaytishingizni maslahat beraman — boshqa yol natijasi sizni xursand qiladi"
 5. Har javob oxirida 1 ta kuzatuvchi savol ber
 
 MUHIM QOIDALAR:
-- Faqat o'zbek tilida gapir
-- Har bo'lim ALOHIDA — nafas mashqi suhbatga aralashmasin
+- Faqat uzbek tilida gapir
+- Har bolim ALOHIDA — nafas mashqi suhbatga aralashmasin
 - 3-5 jumla, aniq va chuqur
-- Emoji o'rinli ishlatish
-- Takroriy shablondan qoching — har javob YANGI bo'lsin
-- O'z joniga qasd holatida: DARHOL psixologga yo'nalt"""
+- Takroriy shablondan qoching — har javob YANGI bolsin
+- Ozjoniga qasd holatida: DARHOL psixologga yonalt"""
 
-DARD_PROMPT = """Sen JAST ning "Dardimni aytay" bo'limidassan.
+DARD_PROMPT = """Sen JAST ning Dardimni aytay bolimidasan.
 
-BU BO'LIMDA FAQAT:
+BU BOLIMDA FAQAT:
 - Chuqur tinglash va empatiya
 - Muammoni 3 qatlamda tahlil qilish
 - CBT va Islomiy psixologiya bilan yordam
 - Aniq, ilmiy asoslangan maslahat
-- Tarix eslab qolish va bog'lash
 
-BU BO'LIMDA HECH QACHON:
-- Nafas mashqi tavsiya qilma (u alohida bo'lim)
-- Meditatsiya tavsiya qilma (u alohida bo'lim)  
+BU BOLIMDA HECH QACHON:
+- Nafas mashqi tavsiya qilma
+- Meditatsiya tavsiya qilma
 - Shablonli javob berma
 
-USLUB: Eng ishonchli do'st + professional psixolog + islomiy maslahatchi
-Qur'on: "Inna ma'al usri yusra" — "Albatta qiyinchilik bilan birga yengillik bor" (Sharh, 6)"""
+Quron: Inna maal usri yusra — Albatta qiyinchilik bilan birga yengillik bor (Sharh, 6)"""
 
-NAFAS_PROMPT = """Sen JAST ning "Nafas mashqi" bo'limidassan.
+NAFAS_PROMPT = """Sen JAST ning Nafas mashqi bolimidasan.
+Faqat nafas texnikalari haqida gapir. Ilmiy asoslar: parasimpatik sistema, vagus nervi.
+Qaysi holatda qaysi texnika mos ekanini tushuntir. Natijani kuzat."""
 
-BU BO'LIMDA FAQAT:
-- Nafas texnikaları haqida gapir
-- Ilmiy asoslar: parasimpatik sistema, vagus nervi, HRV
-- Qaysi holatda qaysi texnika mos ekanini tushuntir
-- Natijani kuzat va dalil ber
-
-HECH QACHON bu bo'limda suhbat/meditatsiya aralashtirsma."""
-
-MOTIVATSIYA_PROMPT = """Sen JAST ning "Motivatsiya" bo'limidassan.
-
-BU BO'LIMDA FAQAT:
-- Kuchli, ilmiy asoslangan motivatsiya
-- Viktor Frankl, Tony Robbins, islomiy ruhoniyat
-- Foydalanuvchining kuchli tomonlarini topish
-- Aniq maqsad va qadam belgilash
-
-Qur'on: "Inna Allaha la yughayyiru ma biqawmin hatta yughayyiru ma bi anfusihim"
-"Allah bir qavmning ahvolini o'zgartirmaydi, to ular o'zlarini o'zgartirmaguncha" (Ra'd, 11)"""
+MOTIVATSIYA_PROMPT = """Sen JAST ning Motivatsiya bolimidasan.
+Kuchli, ilmiy asoslangan motivatsiya ber. Viktor Frankl, Tony Robbins.
+Quron: Allah bir qavmning ahvolini ozgartirmaydi, to ular ozlarini ozgartirmaguncha (Rad, 11)
+Aniq maqsad va qadam belgilash. 4-5 jumla, kuchli va ilhomlantiruvchi."""
 
 def main_menu():
     return ReplyKeyboardMarkup([
-        [KeyboardButton("💬 Dardimni aytay"), KeyboardButton("😊 Kayfiyatim")],
-        [KeyboardButton("🧘 Meditatsiya"), KeyboardButton("🌬 Nafas mashqi")],
-        [KeyboardButton("💪 Motivatsiya"), KeyboardButton("🌟 Bugungi kun")],
-        [KeyboardButton("👨‍⚕️ Psixolog"), KeyboardButton("📊 Mening tarixim")]
+        [KeyboardButton("Dardimni aytay"), KeyboardButton("Kayfiyatim")],
+        [KeyboardButton("Meditatsiya"), KeyboardButton("Nafas mashqi")],
+        [KeyboardButton("Motivatsiya"), KeyboardButton("Bugungi kun")],
+        [KeyboardButton("Psixolog"), KeyboardButton("Mening tarixim")]
     ], resize_keyboard=True)
 
 def back_menu():
-    return ReplyKeyboardMarkup([[KeyboardButton("🏠 Bosh menu")]], resize_keyboard=True)
+    return ReplyKeyboardMarkup([[KeyboardButton("Bosh menu")]], resize_keyboard=True)
 
 async def ai_response(prompt, history, user_msg, max_tokens=350):
-    history.append({"role": "user", "content": user_msg})
+    history.append({"role":"user","content":user_msg})
     if len(history) > 12:
         history = history[-12:]
     try:
         r = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[{"role": "system", "content": prompt}] + history,
+            messages=[{"role":"system","content":prompt}]+history,
             max_tokens=max_tokens, temperature=0.75)
         reply = r.choices[0].message.content
-        history.append({"role": "assistant", "content": reply})
+        history.append({"role":"assistant","content":reply})
         return reply, history
     except Exception as e:
         logger.error(f"AI error: {e}")
-        return "Hozir texnik muammo. Bir daqiqadan keyin qayta yozing. 🙏", history
+        return "Hozir texnik muammo. Qayta yozing.", history
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = get_user(update.effective_user.id)
-    u["name"] = update.effective_user.first_name or "Do'stim"
+    u["name"] = update.effective_user.first_name or "Dostim"
     u["stage"] = "menu"
     u["history"] = []
     u["current_section"] = None
-
     memory = ""
     if u["sessions"]:
         last = u["sessions"][-1]
-        days = (datetime.now() - datetime.strptime(last["date"], "%d.%m.%Y %H:%M")).days
-        memory = f"\n\n💭 Esimda: {last['date']} da {last['section']} haqida gaplashgandik. Natija qanday bo'ldi?"
-
+        memory = f"\n\nEsimda: {last['date']} da {last['section']} haqida gaplashgandik. Natija qanday boldi?"
     await update.message.reply_text(
-        f"Salom, {u['name']}! 👋\n\n"
-        f"Men JAST — sizning eng ishonchli ruhiy yordam do'stingizman. 💚\n\n"
-        f"Har qanday dard, tashvish yoki savol bilan keling — "
-        f"men har doim siz bilan birman. 🤝"
+        f"Salom, {u['name']}! \n\n"
+        f"Men JAST — sizning eng ishonchli ruhiy yordam dostingizman.\n\n"
+        f"Har qanday dard, tashvish yoki savol bilan keling — men har doim siz bilan birman."
         f"{memory}\n\n"
         f"Bugun sizga qanday yordam bera olaman?",
         reply_markup=main_menu())
@@ -169,195 +135,165 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = get_user(uid)
     txt = update.message.text
 
-    if txt == "🏠 Bosh menu":
+    if txt == "Bosh menu":
         if u["history"] and u["current_section"]:
-            save_session(u, u["current_section"], u["history"][-1]["content"][:100] if u["history"] else "")
+            save_session(u, u["current_section"], u["history"][-1]["content"][:100])
         u["stage"] = "menu"
         u["history"] = []
         u["current_section"] = None
-        await update.message.reply_text("🏠 Bosh menuga qaytdingiz", reply_markup=main_menu())
+        await update.message.reply_text("Bosh menuga qaytdingiz", reply_markup=main_menu())
         return
 
-    # === DARDIMNI AYTAY ===
-    if txt == "💬 Dardimni aytay":
+    if txt == "Dardimni aytay":
         u["stage"] = "dard"
         u["current_section"] = "Dard"
         u["history"] = []
         memory_ctx = get_memory_context(u)
-        prompt = DARD_PROMPT + memory_ctx
         reply, u["history"] = await ai_response(
-            prompt, u["history"],
-            f"Foydalanuvchi dard bo'limiga kirdi. Ism: {u['name']}. "
-            f"Uni samimiy kutib ol va nima qiynayotganini so'ra. "
-            f"Tarix: {memory_ctx if memory_ctx else 'birinchi marta'}")
+            DARD_PROMPT + memory_ctx, u["history"],
+            f"Foydalanuvchi dard bolimiga kirdi. Ism: {u['name']}. Uni samimiy kutib ol va nima qiynayotganini so'ra.")
         await update.message.reply_text(reply, reply_markup=back_menu())
         return
 
-    # === KAYFIYAT ===
-    if txt == "😊 Kayfiyatim":
+    if txt == "Kayfiyatim":
         u["stage"] = "mood"
         u["current_section"] = "Kayfiyat"
         await update.message.reply_text(
-            "😊 Bugun kayfiyatingiz qanday?\n\nO'zingizga halol baho bering:",
+            "Bugun kayfiyatingiz qanday?\nOzingizga halol baho bering:",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("😄 Ajoyib (5)", callback_data="mood_5"),
-                 InlineKeyboardButton("🙂 Yaxshi (4)", callback_data="mood_4")],
-                [InlineKeyboardButton("😐 O'rtacha (3)", callback_data="mood_3"),
-                 InlineKeyboardButton("😔 Yomon (2)", callback_data="mood_2")],
-                [InlineKeyboardButton("😢 Juda yomon (1)", callback_data="mood_1")]]))
+                [InlineKeyboardButton("Ajoyib (5)", callback_data="mood_5"),
+                 InlineKeyboardButton("Yaxshi (4)", callback_data="mood_4")],
+                [InlineKeyboardButton("Ortacha (3)", callback_data="mood_3"),
+                 InlineKeyboardButton("Yomon (2)", callback_data="mood_2")],
+                [InlineKeyboardButton("Juda yomon (1)", callback_data="mood_1")]]))
         return
 
-    # === MEDITATSIYA ===
-    if txt == "🧘 Meditatsiya":
+    if txt == "Meditatsiya":
         u["stage"] = "med"
         u["current_section"] = "Meditatsiya"
         await update.message.reply_text(
-            "🧘 Meditatsiya — ichki tinchlik va ong tozaligiga yo'l.\n\n"
-            "Qur'on: 'Ala bizikrillahi tatma'innul qulub' — "
-            "'Bilingki, qalblar faqat Allohni zikr etish bilan tinchlanadi' (Ra'd, 28)\n\n"
+            "Meditatsiya — ichki tinchlik va ong tozaligiga yol.\n\n"
+            "Quron: Ala bizikrillahi tatmainnul qulub — "
+            "Bilingki, qalblar faqat Allohni zikr etish bilan tinchlanadi (Rad, 28)\n\n"
             "Qaysi meditatsiyani tanlaysiz?",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🧘 Tana skaneri (5 daq)", callback_data="med_0")],
-                [InlineKeyboardButton("🌊 Xotirjamlik (3 daq)", callback_data="med_1")],
-                [InlineKeyboardButton("☀️ Ertalab zaryadka (2 daq)", callback_data="med_2")],
-                [InlineKeyboardButton("🌙 Kechki tinchlanish (5 daq)", callback_data="med_3")]]))
+                [InlineKeyboardButton("Tana skaneri (5 daq)", callback_data="med_0")],
+                [InlineKeyboardButton("Xotirjamlik (3 daq)", callback_data="med_1")],
+                [InlineKeyboardButton("Ertalab zaryadka (2 daq)", callback_data="med_2")],
+                [InlineKeyboardButton("Kechki tinchlanish (5 daq)", callback_data="med_3")]]))
         return
 
-    # === NAFAS MASHQI ===
-    if txt == "🌬 Nafas mashqi":
+    if txt == "Nafas mashqi":
         u["stage"] = "nafas"
         u["current_section"] = "Nafas"
         await update.message.reply_text(
-            "🌬 Nafas — eng kuchli tabiiy davo.\n\n"
-            "Ilm: Chuqur nafas vagus nervini faollashtiradi, "
-            "kortizol (stress gormoni) darajasini tushiradi.\n\n"
+            "Nafas — eng kuchli tabiiy davo.\n\n"
+            "Ilm: Chuqur nafas vagus nervini faollashtiradi, kortizol darajasini tushiradi.\n\n"
             "Hozir qanday holatsiz?",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("😰 Tashvish/xavotir", callback_data="breath_0")],
-                [InlineKeyboardButton("😤 Asab/g'azab", callback_data="breath_1")],
-                [InlineKeyboardButton("😴 Uxlay olmayapman", callback_data="breath_2")],
-                [InlineKeyboardButton("😓 Stress/zo'riqish", callback_data="breath_3")],
-                [InlineKeyboardButton("🧘 Umumiy tinchlash", callback_data="breath_4")]]))
+                [InlineKeyboardButton("Tashvish/xavotir", callback_data="breath_0")],
+                [InlineKeyboardButton("Asab/gazab", callback_data="breath_1")],
+                [InlineKeyboardButton("Uxlay olmayapman", callback_data="breath_2")],
+                [InlineKeyboardButton("Stress/zoriqish", callback_data="breath_3")],
+                [InlineKeyboardButton("Umumiy tinchlash", callback_data="breath_4")]]))
         return
 
-    # === MOTIVATSIYA ===
-    if txt == "💪 Motivatsiya":
+    if txt == "Motivatsiya":
         u["stage"] = "motivatsiya"
         u["current_section"] = "Motivatsiya"
         u["history"] = []
         reply, u["history"] = await ai_response(
             MOTIVATSIYA_PROMPT, u["history"],
-            f"Foydalanuvchi {u['name']} motivatsiya izlayapti. "
-            f"Unga kuchli, ilmiy va islomiy asoslangan motivatsiya ber. "
-            f"Viktor Frankl yoki boshqa psixologlardan misol keltir. "
-            f"Oxirida bir aniq qadam taklif qil.")
+            f"Foydalanuvchi {u['name']} motivatsiya izlayapti. Kuchli, ilmiy va islomiy asoslangan motivatsiya ber. Oxirida bir aniq qadam taklif qil.")
         await update.message.reply_text(reply, reply_markup=back_menu())
         return
 
-    # === BUGUNGI KUN ===
-    if txt == "🌟 Bugungi kun":
+    if txt == "Bugungi kun":
         u["stage"] = "menu"
         today = datetime.now()
         bugun = today.strftime("%d.%m.%Y")
-        prompt_today = f"""Bugun {bugun}. Foydalanuvchiga quyidagilarni ayt:
-1. Bugun tarixda bo'lgan muhim va ilhomlantiruvchi voqealar (2-3 ta)
-2. Bugun tug'ilgan mashhur va muvaffaqiyatli insonlar (1-2 ta) va ulardan ilhomlantiruvchi gap
-3. Bugun uchun maxsus motivatsiya va kuch beruvchi so'zlar
-4. Islomiy nuqtai nazar: bugungi kunga shukr
-Hammasini o'zbek tilida, qiziqarli va ilhomlantiruvchi qilib yoz."""
+        prompt_today = f"""Bugun {bugun}. Foydalanuvchiga quyidagilarni TOLIK va YAKUNLANGAN holda yoz:
+
+1. Bugun tarixda bolgan 2-3 ta muhim va ilhomlantiruvchi voqea (yil va tavsif bilan)
+2. Bugun tughilgan 1-2 ta mashhur va muvaffaqiyatli inson, ularning ishlari va TOLIK bir ilhomlantiruvchi gap
+3. Bugun uchun kuchli motivatsiya (2-3 jumla)
+4. Islomiy nuqtai nazar: bugungi kunga shukr (1 oyat yoki hadis)
+
+MUHIM: Har bir fikrni TOLIK yakunla. Chala qoldirma. Hamma matn tugallangan bolsin."""
+
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         try:
             r = groq_client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": prompt_today}],
-                max_tokens=400, temperature=0.8)
+                messages=[{"role":"user","content":prompt_today}],
+                max_tokens=900, temperature=0.8)
             reply = r.choices[0].message.content
         except:
-            reply = f"🌟 {bugun} — yangi imkoniyatlar kuni!\n\nBugun ham katta ishlar qilishingiz mumkin. Allah sizga baraka bersin! 💚"
-        await update.message.reply_text(f"🌟 Bugun — {bugun}\n\n{reply}", reply_markup=main_menu())
+            reply = f"Bugun {bugun} — yangi imkoniyatlar kuni!\n\nBugun ham katta ishlar qilishingiz mumkin. Allah sizga baraka bersin!"
+        await update.message.reply_text(f"Bugun — {bugun}\n\n{reply}", reply_markup=main_menu())
         return
 
-    # === PSIXOLOG ===
-    if txt == "👨‍⚕️ Psixolog":
+    if txt == "Psixolog":
         await update.message.reply_text(
-            "👨‍⚕️ *Mutaxassis psixolog bilan bog'lanish*\n\n"
-            "Islomda ham ta'kidlanadi: kasallik vaqtida tabibga borish — sunnah.\n"
-            "Professional yordam olish — bu kuchsizlik emas, *jasorat* belgisi! 💪\n\n"
+            "Mutaxassis psixolog bilan boglanish\n\n"
+            "Islomda ham takidlanadi: kasallik vaqtida tabibga borish — sunnah.\n"
+            "Professional yordam olish — bu kuchsizlik emas, jasorat belgisi!\n\n"
             "Psixolog raqamini olish uchun:",
-            parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("📞 Psixolog raqamini olish", url="https://t.me/boburxoja")
+                InlineKeyboardButton("Psixolog raqamini olish", url="https://t.me/boburxoja")
             ]]))
         return
 
-    # === MENING TARIXIM ===
-    if txt == "📊 Mening tarixim":
+    if txt == "Mening tarixim":
         moods = u.get("moods", [])
         sessions = u.get("sessions", [])
         join = u.get("join_date", "noma'lum")
-
         if not moods and not sessions:
             await update.message.reply_text(
-                f"📊 Salom, {u['name']}!\n\n"
-                f"Hali yozuv yo'q. Botdan foydalanishni boshlang — "
-                f"vaqt o'tishi bilan o'sishingizni ko'rasiz! 🌱",
-                reply_markup=main_menu())
+                f"Salom, {u['name']}!\n\nHali yozuv yoq. Botdan foydalanishni boshlang!", reply_markup=main_menu())
             return
-
-        text = f"📊 *{u['name']} ning tarixi:*\n\n"
-        text += f"📅 Bot bilan: {join} dan\n"
-
+        text = f"{u['name']} ning tarixi:\n\nBot bilan: {join} dan\n"
         if moods:
             avg = sum(m["score"] for m in moods) / len(moods)
             best = max(moods, key=lambda x: x["score"])
             worst = min(moods, key=lambda x: x["score"])
-            text += f"\n😊 Kayfiyat yozuvlari: {len(moods)} ta\n"
-            text += f"📈 O'rtacha: {avg:.1f}/5\n"
-            text += f"🌟 Eng yaxshi kun: {best['date']} — {best['label']}\n"
-            text += f"💙 Qiyin kun: {worst['date']} — {worst['label']}\n"
-
+            text += f"\nKayfiyat yozuvlari: {len(moods)} ta\n"
+            text += f"Ortacha: {avg:.1f}/5\n"
+            text += f"Eng yaxshi kun: {best['date']} — {best['label']}\n"
+            text += f"Qiyin kun: {worst['date']} — {worst['label']}\n"
         if sessions:
-            text += f"\n💬 Suhbatlar: {len(sessions)} ta\n"
-            text += f"\n*So'nggi suhbatlar:*\n"
+            text += f"\nSuhbatlar: {len(sessions)} ta\n\nSonggi suhbatlar:\n"
             for s in sessions[-3:]:
-                text += f"• {s['date']}: {s['section']}\n"
-
-        text += f"\n💚 Davom eting — har kun bir qadam oldinga! 🌟"
-        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=main_menu())
+                text += f"- {s['date']}: {s['section']}\n"
+        text += f"\nDavom eting — har kun bir qadam oldinga!"
+        await update.message.reply_text(text, reply_markup=main_menu())
         return
 
-    # === DAVOMIY SUHBAT ===
     if u["stage"] == "dard":
         memory_ctx = get_memory_context(u)
-        reply, u["history"] = await ai_response(
-            DARD_PROMPT + memory_ctx, u["history"], txt)
+        reply, u["history"] = await ai_response(DARD_PROMPT + memory_ctx, u["history"], txt)
         await update.message.reply_text(reply, reply_markup=back_menu())
         return
 
     if u["stage"] == "nafas_chat":
-        reply, u["history"] = await ai_response(
-            NAFAS_PROMPT, u["history"], txt)
+        reply, u["history"] = await ai_response(NAFAS_PROMPT, u["history"], txt)
         await update.message.reply_text(reply, reply_markup=back_menu())
         return
 
     if u["stage"] == "motivatsiya":
-        reply, u["history"] = await ai_response(
-            MOTIVATSIYA_PROMPT, u["history"], txt)
+        reply, u["history"] = await ai_response(MOTIVATSIYA_PROMPT, u["history"], txt)
         await update.message.reply_text(reply, reply_markup=back_menu())
         return
 
     if u["stage"] == "mood_chat":
         memory_ctx = get_memory_context(u)
-        reply, u["history"] = await ai_response(
-            MAIN_PROMPT + memory_ctx, u["history"], txt)
+        reply, u["history"] = await ai_response(MAIN_PROMPT + memory_ctx, u["history"], txt)
         await update.message.reply_text(reply, reply_markup=back_menu())
         return
 
-    # === UMUMIY JAVOB ===
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     memory_ctx = get_memory_context(u)
-    reply, u["history"] = await ai_response(
-        MAIN_PROMPT + memory_ctx, u["history"], txt)
+    reply, u["history"] = await ai_response(MAIN_PROMPT + memory_ctx, u["history"], txt)
     await update.message.reply_text(reply, reply_markup=main_menu())
 
 async def mood_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -366,67 +302,46 @@ async def mood_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = q.from_user.id
     u = get_user(uid)
     score = int(q.data.split("_")[1])
-    labels = {5:"Ajoyib 😄", 4:"Yaxshi 🙂", 3:"O'rtacha 😐", 2:"Yomon 😔", 1:"Juda yomon 😢"}
-    u["moods"].append({
-        "score": score,
-        "label": labels[score],
-        "date": datetime.now().strftime("%d.%m.%Y %H:%M")
-    })
-
+    labels = {5:"Ajoyib", 4:"Yaxshi", 3:"Ortacha", 2:"Yomon", 1:"Juda yomon"}
+    u["moods"].append({"score":score,"label":labels[score],"date":datetime.now().strftime("%d.%m.%Y %H:%M")})
     responses = {
-        5: "😄 Ajoyib! Bu energiyani saqlash uchun — bugun 3 ta minnatdorlik yozing. Kimga yoki nimaga minnatdorsiz?",
-        4: "🙂 Yaxshi kayfiyat — bu ne'mat! Qur'on: 'Shukr qilsangiz, albatta ziyadalayman' (Ibrohim, 7). Bugun nima yaxshi bo'ldi?",
-        3: "😐 O'rtacha... Bu holat signal. Nima sizni to'liq baxtli qilishidan to'syapti? Bir sabab ayting.",
-        2: "😔 Yomon kayfiyat — bu o'tib ketadi. 'Inna ma'al usri yusra' — qiyinchilik bilan yengillik birga. Nima bo'ldi bugun?",
-        1: "😢 Juda og'ir kun... Men siz bilan birman. Hech narsa aytmasangiz ham bo'ladi — shunchaki bilishingiz kerak: yolg'iz emassiz. Nima qiynayapti?"
+        5: "Ajoyib! Bu energiyani saqlash uchun — bugun 3 ta minnatdorlik yozing. Kimga yoki nimaga minnatdorsiz?",
+        4: "Yaxshi kayfiyat — bu nemat! Quron: Shukr qilsangiz, albatta ziyadalayman (Ibrohim, 7). Bugun nima yaxshi boldi?",
+        3: "Ortacha... Bu holat signal. Nima sizni toliq baxtli qilishidan tosyapti? Bir sabab ayting.",
+        2: "Yomon kayfiyat — bu otib ketadi. Inna maal usri yusra — qiyinchilik bilan yengillik birga. Nima boldi bugun?",
+        1: "Juda ogir kun... Men siz bilan birman. Yolgiz emassiz. Nima qiynayapti?"
     }
-
     u["stage"] = "mood_chat"
     u["history"] = []
     await q.edit_message_text(responses[score])
-    await context.bot.send_message(q.message.chat_id, "Men eshityapman... 💚", reply_markup=back_menu())
-
+    await context.bot.send_message(q.message.chat_id, "Men eshityapman...", reply_markup=back_menu())
     if score <= 2:
         await context.bot.send_message(
-            q.message.chat_id,
-            "Agar juda og'ir bo'lsa psixolog bilan gaplashing:",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("📞 Psixolog", url="https://t.me/boburxoja")
-            ]]))
+            q.message.chat_id, "Agar juda ogir bolsa psixolog bilan gaplashing:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Psixolog", url="https://t.me/boburxoja")]]))
 
 MEDS_DATA = [
-    ("🧘 Tana skaneri (5 daqiqa)",
-     "Ilm: Body scan meditatsiyasi interoception — ichki his-tuyg'u idrokini kuchaytiradi.\n\n"
-     "1️⃣ Qulay o'tiring yoki yoting\n"
-     "2️⃣ Ko'zingizni yuming — 3 marta chuqur nafas\n"
-     "3️⃣ Boshingizdan boshlang — qayerda taranglik bor?\n"
-     "4️⃣ Yelkalar → Ko'krak → Qorin → Oyoqlar\n"
-     "5️⃣ Har joyda 10 soniya — taranglikni his qiling va qo'yvoring\n\n"
-     "⏱ 5 daqiqa. Telefoni qo'ying. Hozir boshlang. 🙏"),
-    ("🌊 Xotirjamlik (3 daqiqa)",
+    ("Tana skaneri (5 daqiqa)",
+     "Ilm: Body scan meditatsiyasi interoception — ichki his-tuygu idrokini kuchaytiradi.\n\n"
+     "1. Qulay otiring yoki yoting\n2. Kozingizni yuming — 3 marta chuqur nafas\n"
+     "3. Boshingizdan boshlang — qayerda taranglik bor?\n"
+     "4. Yelkalar — Kokrak — Qorin — Oyoqlar\n"
+     "5. Har joyda 10 soniya — taranglikni his qiling va qoyvoring\n\n5 daqiqa. Hozir boshlang."),
+    ("Xotirjamlik (3 daqiqa)",
      "Ilm: Mindfulness meditatsiyasi amigdalani tinchitadi — xavotir markazi.\n\n"
-     "🌊 Ko'zingizni yuming\n"
-     "🌊 Dengiz qirg'og'ini tasavvur qiling\n"
-     "🌊 Har nafas — to'lqin keladi\n"
-     "🌊 Har chiqarish — to'lqin ketadi\n"
-     "💭 Fikrlar kelsa — to'lqin olib ketsin\n\n"
-     "⏱ 3 daqiqa. Hoziroq. 💙"),
-    ("☀️ Ertalab zaryadka (2 daqiqa)",
+     "Kozingizni yuming. Dengiz qirgogini tasavvur qiling.\n"
+     "Har nafas — tolqin keladi. Har chikarish — tolqin ketadi.\n"
+     "Fikrlar kelsa — tolqin olib ketsin.\n\n3 daqiqa. Hoziroq."),
+    ("Ertalab zaryadka (2 daqiqa)",
      "Ilm: Ertalabki ritual kortizol darajasini ijobiy boshqaradi.\n\n"
-     "1️⃣ O'rningizdan turing — oyoqlaringiz yerga tegsin\n"
-     "2️⃣ Qo'llarni osmonga ko'taring — kengaling!\n"
-     "3️⃣ 5 marta chuqur nafas\n"
-     "4️⃣ Bugun 1 ta maqsad — kichik bo'lsa ham\n"
-     "5️⃣ 'Bismillah, bugun yaxshi kun' — deyish\n\n"
-     "⏱ 2 daqiqa. Har kuni! 💚"),
-    ("🌙 Kechki tinchlanish (5 daqiqa)",
+     "1. Orningizdan turing\n2. Qollarni osmonga kotaring\n"
+     "3. 5 marta chuqur nafas\n4. Bugun 1 ta maqsad\n"
+     "5. Bismillah, bugun yaxshi kun — deyish\n\n2 daqiqa. Har kuni!"),
+    ("Kechki tinchlanish (5 daqiqa)",
      "Ilm: Kechki minnatdorlik rituali serotonin ishlab chiqarishni oshiradi.\n\n"
-     "1️⃣ Yotib oling — qulay joy\n"
-     "2️⃣ Bugun bo'lgan 3 ta yaxshi narsa — kichkina bo'lsa ham\n"
-     "3️⃣ Kimga yaxshilik qildingiz bugun?\n"
-     "4️⃣ Ertangi kun uchun 1 ta niyat\n"
-     "5️⃣ 'Alhamdulillah bu kun uchun' — deyish\n\n"
-     "⏱ 5 daqiqa. Har kechasi. 🌙")
+     "1. Yotib oling\n2. Bugun bolgan 3 ta yaxshi narsa\n"
+     "3. Kimga yaxshilik qildingiz bugun?\n4. Ertangi kun uchun 1 ta niyat\n"
+     "5. Alhamdulillah bu kun uchun — deyish\n\n5 daqiqa. Har kechasi.")
 ]
 
 async def med_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -436,53 +351,32 @@ async def med_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.edit_message_text(f"{MEDS_DATA[idx][0]}\n\n{MEDS_DATA[idx][1]}")
     await context.bot.send_message(
         q.message.chat_id,
-        "✅ Boshlang — men kutib turaman.\n\nTugagach yozing: qanday his qildingiz? 💚",
+        "Boshlang — men kutib turaman.\nTugagach yozing: qanday his qildingiz?",
         reply_markup=back_menu())
 
 BREATHS_DATA = [
-    ("😰 Tashvish uchun — 4-7-8 nafas",
-     "Ilm: Bu texnika parasimpatik nervni faollashtiradi, "
-     "adrenalin darajasini 40% gacha kamaytiradi.\n\n"
-     "👃 4 soniya — burun orqali nafas OLING\n"
-     "⏸ 7 soniya — ushlab TURING\n"
-     "💨 8 soniya — og'iz orqali SEKIN chiqaring\n\n"
-     "🔁 4 marta takrorlang\n\n"
-     "Hozir boshlang... men siz bilan. 💙"),
-    ("😤 G'azab uchun — Quti nafas",
-     "Ilm: Box breathing Navy SEAL lari ishlatadi — "
-     "g'azab va stressni 3 daqiqada bosadi.\n\n"
-     "▶️ 4 soniya nafas\n"
-     "⏸ 4 soniya ushlab tur\n"
-     "◀️ 4 soniya chikar\n"
-     "⏸ 4 soniya ushlab tur\n\n"
-     "🔁 5 marta — 4 daqiqa\n\n"
-     "Kvadrat chizing xayolda — har tomoni 4 soniya. 📦"),
-    ("😴 Uxlash uchun — 4-7-8",
-     "Ilm: Ushbu texnika Dr. Andrew Weil tomonidan ishlab chiqilgan — "
-     "10-15 daqiqada uxlatadi.\n\n"
-     "👃 4 soniya nafas\n"
-     "⏸ 7 soniya ushlab tur\n"
-     "💨 8 soniya chikar\n\n"
-     "🔁 4-6 marta\n\n"
-     "Ko'zingizni yuming. Xonani qorong'i qiling. 🌙\n"
-     "Diqqat: chiqarish nafas uzun bo'lishi muhim."),
-    ("😓 Stress uchun — Fiziologik xo'rsinish",
-     "Ilm: Stanford tadqiqoti — bu texnika stressni "
-     "eng tez kamaytiruvchi nafas usuli.\n\n"
-     "1️⃣ Burun orqali 2 qisqa nafas (ikkinchisi kuchliroq)\n"
-     "2️⃣ Og'iz orqali 1 uzun nafas chiqarish\n\n"
-     "🔁 3-5 marta\n\n"
-     "Bu o'pkadagi havo qopchalarini ochadi — "
-     "darhol tinchlash beradi. ⚡"),
-    ("🧘 Umumiy tinchlash — Diafragma nafas",
-     "Ilm: Diafragma nafas HRV (yurak ritmi variabelligini) "
-     "yaxshilaydi — stressga chidamlilik oshadi.\n\n"
-     "1️⃣ Qorin ustiga qo'lingizni qo'ying\n"
-     "2️⃣ 4 soniya — qorin ko'tarilib nafas\n"
-     "3️⃣ 4 soniya — qorin tushib chikarish\n\n"
-     "🔁 10 marta — 2 daqiqa\n\n"
-     "Har kuni 5-10 daqiqa — "
-     "1 oyda stressga chidamlilik ikki baravar oshadi! 💚")
+    ("Tashvish uchun — 4-7-8 nafas",
+     "Ilm: Bu texnika parasimpatik nervni faollashtiradi, adrenalin darajasini 40% kamaytiradi.\n\n"
+     "4 soniya — burun orqali nafas OLING\n7 soniya — ushlab TURING\n8 soniya — ogiz orqali SEKIN chiqaring\n\n"
+     "4 marta takrorlang. Hozir boshlang."),
+    ("Gazab uchun — Quti nafas",
+     "Ilm: Box breathing Navy SEAL lari ishlatadi — gazab va stressni 3 daqiqada bosadi.\n\n"
+     "4 soniya nafas — 4 soniya ushlab tur — 4 soniya chikar — 4 soniya ushlab tur\n\n"
+     "5 marta. Kvadrat chizing — har tomoni 4 soniya."),
+    ("Uxlash uchun — 4-7-8",
+     "Ilm: Dr. Andrew Weil texnikasi — 10-15 daqiqada uxlatadi.\n\n"
+     "4 soniya nafas — 7 soniya ushlab tur — 8 soniya chikar\n\n"
+     "4-6 marta. Kozingizni yuming. Xonani qorong'i qiling."),
+    ("Stress uchun — Fiziologik xorsinish",
+     "Ilm: Stanford tadqiqoti — eng tez stressni kamaytiruvchi nafas.\n\n"
+     "1. Burun orqali 2 qisqa nafas (ikkinchisi kuchliroq)\n"
+     "2. Ogiz orqali 1 uzun nafas chiqarish\n\n"
+     "3-5 marta. Darhol tinchlash beradi."),
+    ("Umumiy tinchlash — Diafragma nafas",
+     "Ilm: Diafragma nafas HRV yaxshilaydi — stressga chidamlilik oshadi.\n\n"
+     "Qorin ustiga qolingizni qoying.\n"
+     "4 soniya — qorin kotalib nafas. 4 soniya — qorin tushib chikarish.\n\n"
+     "10 marta. Har kuni 5-10 daqiqa — 1 oyda stressga chidamlilik 2 baravar oshadi!")
 ]
 
 async def breath_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -496,24 +390,23 @@ async def breath_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u["history"] = []
     await context.bot.send_message(
         q.message.chat_id,
-        "⏱ Boshlang! Tugagach yozing — qanday his qildingiz? "
-        "Natijani birga tahlil qilamiz. 💚",
+        "Boshlang! Tugagach yozing — qanday his qildingiz? Natijani birga tahlil qilamiz.",
         reply_markup=back_menu())
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("Bu buyruq faqat admin uchun! 🔒")
+        await update.message.reply_text("Bu buyruq faqat admin uchun!")
         return
     total = len(users)
     total_moods = sum(len(u["moods"]) for u in users.values())
     total_sessions = sum(len(u["sessions"]) for u in users.values())
     active = sum(1 for u in users.values() if u.get("stage") != "menu")
     await update.message.reply_text(
-        f"📊 JAST Admin Panel:\n\n"
-        f"👤 Jami foydalanuvchilar: {total}\n"
-        f"🟢 Faol suhbatlar: {active}\n"
-        f"😊 Kayfiyat yozuvlari: {total_moods}\n"
-        f"💬 Suhbat sessiyalari: {total_sessions}")
+        f"JAST Admin Panel:\n\n"
+        f"Jami foydalanuvchilar: {total}\n"
+        f"Faol suhbatlar: {active}\n"
+        f"Kayfiyat yozuvlari: {total_moods}\n"
+        f"Suhbat sessiyalari: {total_sessions}")
 
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
