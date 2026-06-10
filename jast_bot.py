@@ -84,7 +84,7 @@ Ilmiy asoslar sifatida parasimpatik asab tizimi va vagus nervining faollashishin
 Foydalanuvchining hozirgi holatiga qarab qaysi nafas texnikasi mos kelishini aniq tushuntirib ber hamda mashq natijasini so'ra."""
 
 MOTIVATSIYA_PROMPT = """Sen JAST loyihasining "Motivatsiya" bo'limidasan.
-Foydalanuvchiga kuchli, ilmiy va mantiqiy jihatdan asoslangan motivatsiya ber. Viktor Frankl va Toni Robbinsning hayotiy prinsiplaridan misollar keltir.
+Faqat va faqat foydalanuvchiga kuchli, ilmiy va mantiqiy jihatdan asoslangan motivatsiya ber. Viktor Frankl va Toni Robbinsning hayotiy prinsiplaridan misollar keltir.
 Qur'oni Karim: "Albatta, Alloh bir qavmning ahvolini, ular o'zlarini o'zgartirmagunlaricha o'zgartirmas" (Ra'd surasi, 11-oyat).
 Foydalanuvchi uchun bugunning o'zida amalga oshirishi kerak bo'lgan 1 ta aniq maqsad va qadam belgilab ber. Jumlalaring 4-5 tadan oshmasin, biroq juda ta'sirli va jo'shqin bo'lsin."""
 
@@ -99,7 +99,6 @@ def main_menu():
 def back_menu():
     return ReplyKeyboardMarkup([[KeyboardButton("⬅️ Bosh menu")]], resize_keyboard=True)
 
-# max_tokens standart qiymati o'zbek tili uchun 800 ga oshirildi, gap uzilib qolmasligi uchun
 async def ai_response(prompt, history, user_msg, max_tokens=800):
     history.append({"role":"user","content":user_msg})
     if len(history) > 12:
@@ -218,21 +217,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         u["stage"] = "menu"
         today = datetime.now()
         bugun = today.strftime("%d.%m.%Y")
-        prompt_today = f"""Bugun {bugun} sana. Foydalanuvchiga adabiy tilda, grammatik xatolarsiz quyidagilarni yozib ber:
+        
+        # PROMPT MUTLAQ TUZATILDI: Tarixiy faktlarni aniq generatsiya qilish va matn g'alizligini yo'qotish bo'yicha qat'iy filtr qo'shildi.
+        prompt_today = f"""Bugun kalendar bo'yicha {bugun} sana (kun va oyga e'tibor ber). Foydalanuvchiga sof o'zbek adabiy tilida, grammatik va imlo xatolarsiz quyidagi reja asosida chiroyli xabar yozib ber:
 
-1. Bugun tarixda sodir bo'lgan 2-3 ta muhim va ilhomlantiruvchi voqea (yil va qisqacha tavsifi bilan).
-2. Bugun tug'ilgan 1-2 ta mashhur va muvaffaqiyatga erishgan inson, ularning insoniyat uchun qilgan xizmatlari va hayotiy motivatsion iqtibosi.
-3. Bugungi kun uchun kuchli ruhiy motivatsiya (2-3 ta gapdan iborat tugallangan fikr).
-4. Islomiy nuqtai nazar: bugungi kunga yetganlik uchun shukronalik keltirish haqida 1 ta oyat yoki hadis ma'nosi.
+1. Bugungi kunda (aynan shu oy va kunda) tarixda sodir bo'lgan 2 ta eng muhim, aniq va haqiqiy tarixiy voqeani yil va aniq qisqacha tavsifi bilan yoz (Faktlar 100% real bo'lsin, yil yoki shaxslarni mutloq chalkashtirma!).
+2. Shu kunda tug'ilgan dunyoga mashhur 1 ta munosib shaxs, uning insoniyatga keltirgan foydasi va unga tegishli ilhomlantiruvchi, ma'noli iqtibosni keltir. Gaplarni takrorlama.
+3. Bugungi kun uchun maxsus, 2-3 jumladan iborat ta'sirli va tugallangan ruhiy motivatsiya yoz. (Matnda so'z o'yinlari yoki imlo xatolari bo'lmasin, masalan: "ishonch bilan intiling" kabi toza yozilsin).
+4. Islomiy nuqtai nazar: Ushbu yangi kunga sog'-salomat yetkazgani uchun Allohga shukronalik bildirish va berilgan umr ne'matini qadrlash haqida "Ibrohim" surasining 7-oyati ma'nosini chiroyli adabiy tilda bayon qil ("Agar shukr qilsangiz, albatta ziyoda qilurman...").
 
-MUHIM: Har bir fikrni to'liq yakunla, chala jumlalar qolmasin va balla gaplar adabiy o'zbek tilida bo'lsin."""
+MUHIM QOIDALAR:
+- Hech qanday gap yoki fikr chala qolmasin.
+- Bir marta aytilgan ma'lumot (masalan, shaxs ismi) matn davomida aynan o'sha so'zlar bilan asossiz qayta-qayta takrorlanmasin.
+- -ganligini, -ishligini kabi sun'iy shakllardan qochib, ravon o'zbek tilida yoz."""
 
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         try:
             r = groq_client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role":"user","content":prompt_today}],
-                max_tokens=1200, temperature=0.8)
+                max_tokens=1200, temperature=0.6) # Temp biroz pasaytirildi (faktlar aniq chiqishi uchun)
             reply = r.choices[0].message.content
         except:
             reply = f"✨ Bugun {bugun} — siz uchun yangi imkoniyatlar eshigi!\n\n💪 Bugun ham hayotingizda go'zal o'zgarishlar qilishga qodirsiz. Alloh kunigizga baraka bersin!"
@@ -297,7 +301,6 @@ MUHIM: Har bir fikrni to'liq yakunla, chala jumlalar qolmasin va balla gaplar ad
         await update.message.reply_text(reply, reply_markup=back_menu())
         return
 
-    # Foydalanuvchi menyudan tashqari erkin narsa yozganda ishlaydigan asosiy qism (max_tokens=800 qilib to'g'rilandi)
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     memory_ctx = get_memory_context(u)
     reply, u["history"] = await ai_response(MAIN_PROMPT + memory_ctx, u["history"], txt, max_tokens=800)
@@ -412,7 +415,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_sessions = sum(len(u["sessions"]) for u in users.values())
     active = sum(1 for u in users.values() if u.get("stage") != "menu")
     await update.message.reply_text(
-        f"⚙️ *JAST Administrator Paneli:*\n\n"
+        f"⚙️ *JAST Administrator Panelini:*\n\n"
         f"👥 *Jami ro'yxatdan o'tganlar:* {total} ta\n"
         f"🔥 *Hozirgi faol muloqotlar:* {active} ta\n"
         f"📊 *Kiritilgan kayfiyat qaydlari:* {total_moods} ta\n"
